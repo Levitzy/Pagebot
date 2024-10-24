@@ -1,6 +1,7 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 let isProcessing = false;
 
@@ -11,7 +12,6 @@ module.exports = {
   description: "Send a random Shoti video",
   async run({ api, event, send }) {
     const { threadID, messageID } = event;
-    const filePath = path.join(__dirname, 'shoti.mp4');
 
     // Prevent multiple command executions simultaneously
     if (isProcessing) {
@@ -31,14 +31,17 @@ module.exports = {
         const videoUrl = response.data.videoDownloadLink;
         const videoTitle = response.data.title;
 
-        // Download the video
+        // Create a temporary file path
+        const tempFilePath = path.join(os.tmpdir(), 'shoti.mp4');
+
+        // Download the video to the temporary file
         const videoStream = await axios({
           url: videoUrl,
           method: 'GET',
           responseType: 'stream'
         });
 
-        const writer = fs.createWriteStream(filePath);
+        const writer = fs.createWriteStream(tempFilePath);
         videoStream.data.pipe(writer);
 
         // Wait for the video to finish downloading
@@ -50,11 +53,11 @@ module.exports = {
         // Send the video as a new message with the title
         await send({
           body: `Here is the Shoti video: ${videoTitle}`,
-          attachment: fs.createReadStream(filePath)
+          attachment: fs.createReadStream(tempFilePath)
         });
 
-        // Delete the temporary video file
-        fs.unlinkSync(filePath);
+        // Clean up the temporary file after sending
+        fs.unlinkSync(tempFilePath);
       } else {
         // Notify user of failure
         await send("Failed to fetch Shoti video. Please try again.");
