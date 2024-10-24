@@ -31,8 +31,8 @@ module.exports = {
         const videoUrl = response.data.videoDownloadLink;
         const videoTitle = response.data.title;
 
-        // Create a temporary file path
-        const tempFilePath = path.join(os.tmpdir(), 'shoti.mp4');
+        // Create a temporary file path in the system temp directory
+        const tempFilePath = path.join(os.tmpdir(), `${Date.now()}-shoti.mp4`);
 
         // Download the video to the temporary file
         const videoStream = await axios({
@@ -50,7 +50,7 @@ module.exports = {
           writer.on('error', reject);
         });
 
-        // Send the video as a new message with the title
+        // Send the video to the user
         await send({
           body: `Here is the Shoti video: ${videoTitle}`,
           attachment: fs.createReadStream(tempFilePath)
