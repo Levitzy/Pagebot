@@ -37,7 +37,7 @@ async function Load() {
         } else if (exitCode === 1) {
           console.log(`Error: code ${exitCode}`);
           console.log(`Restarting WSE PageBot...`);
-          Load()f DD dzE
+          Load()
         } else {
           console.log(`Error: code ${exitCode}`);
         }
