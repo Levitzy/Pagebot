@@ -1,22 +1,24 @@
-const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const FormData = require('form-data');
+const axios = require("axios");
+const path = require("path");
+const os = require("os");
+const fs = require("fs");
 
 const name = "shoti";
 
 module.exports = {
   name,
-  description: "Send a random Shoti video",
-  async run({ api, event, send }) {
+  description: "Sends a random Shoti video.",
+  async run({ api, send, args }) {
     try {
-      // Notify the user that the video is being downloaded
+      // Notify the user that the download is starting
       await send("Downloading random Shoti video. Please wait...");
 
       // Fetch random Shoti video data
-      const response = await axios.get('https://shoti.kenliejugarap.com/getvideo.php?apikey=shoti-0763839a3b9de35ae3da73816d087d57d1bbae9f8997d9ebd0da823850fb80917e69d239a7f7db34b4d139a5e3b02658ed26f49928e5ab40f57c9798c9ae7290c536d8378ea8b01399723aaf35f62fae7c58d08f04');
+      const response = await axios.get(
+        "https://shoti.kenliejugarap.com/getvideo.php?apikey=shoti-0763839a3b9de35ae3da73816d087d57d1bbae9f8997d9ebd0da823850fb80917e69d239a7f7db34b4d139a5e3b02658ed26f49928e5ab40f57c9798c9ae7290c536d8378ea8b01399723aaf35f62fae7c58d08f04"
+      );
 
+      // Check if the response status is valid and video data is available
       if (response.data.status) {
         const videoUrl = response.data.videoDownloadLink;
         const videoTitle = response.data.title;
@@ -27,54 +29,36 @@ module.exports = {
         // Download the video to the temporary file
         const videoStream = await axios({
           url: videoUrl,
-          method: 'GET',
-          responseType: 'stream'
+          method: "GET",
+          responseType: "stream",
         });
 
-        // Save the video to the temporary file
+        // Write the video stream to the temporary file
         const writer = fs.createWriteStream(tempFilePath);
         videoStream.data.pipe(writer);
 
-        // Wait for the file writing to finish
+        // Wait for the download to finish
         await new Promise((resolve, reject) => {
-          writer.on('finish', resolve);
-          writer.on('error', reject);
-        });
-
-        // Prepare FormData for video upload
-        const formData = new FormData();
-        formData.append('recipient', JSON.stringify({ id: event.senderID }));
-        formData.append('message', JSON.stringify({ body: `Here is your random Shoti video: ${videoTitle}` }));
-        formData.append('filedata', fs.createReadStream(tempFilePath), {
-          filename: 'video.mp4',
-          contentType: 'video/mp4'
+          writer.on("finish", resolve);
+          writer.on("error", reject);
         });
 
         // Send the video as an attachment
-        const sendResponse = await axios.post(
-          `https://graph.facebook.com/v21.0/me/messages`,
-          formData,
-          {
-            params: {
-              access_token: api.PAGE_ACCESS_TOKEN, // Using the token from your setup
-            },
-            headers: {
-              ...formData.getHeaders(),
-            }
-          }
-        );
+        await send({
+          attachment: {
+            type: "video",
+            payload: fs.createReadStream(tempFilePath),
+          },
+        });
 
-        if (sendResponse.data.error) {
-          throw new Error(`Error sending video: ${sendResponse.data.error.message}`);
-        }
-
-        // Clean up the temporary file
+        // Delete the temporary file after sending
         fs.unlinkSync(tempFilePath);
       } else {
-        send("Failed to fetch a Shoti video. Please try again later.");
+        await send("Failed to fetch the Shoti video. Please try again later.");
       }
-    } catch (err) {
-      send(`Error: ${err.message}`);
+    } catch (error) {
+      console.error(error);
+      await send("An error occurred while processing your request.");
     }
-  }
+  },
 };
