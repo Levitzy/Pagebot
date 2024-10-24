@@ -1,73 +1,66 @@
-const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-
-let isProcessing = false;
-
 const name = "shoti";
+const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
 
 module.exports = {
   name,
-  description: "Send a random Shoti video",
-  async run({ api, event, send }) {
-    const { threadID, messageID } = event;
+  description: "Download a video using the Shoti API and send it to the user",
+  async run({ api, event, send, args }) {
+    const prompt = args.join(" ");
+    if (!prompt) return send(`Please provide a valid URL. 
 
-    // Prevent multiple command executions simultaneously
-    if (isProcessing) {
-      return send("The command is already in use. Please wait until the current process finishes.");
-    }
+Example: ${api.prefix + name} <video-url>`);
 
-    isProcessing = true;
+    send("Processing your request, please wait... 🔎");
 
     try {
-      // Notify user that the video is being downloaded
-      await send("Downloading random Shoti video. Please wait...");
-
-      // Fetch random Shoti video data
-      const response = await axios.get('https://shoti.kenliejugarap.com/getvideo.php?apikey=shoti-0763839a3b9de35ae3da73816d087d57d1bbae9f8997d9ebd0da823850fb80917e69d239a7f7db34b4d139a5e3b02658ed26f49928e5ab40f57c9798c9ae7290c536d8378ea8b01399723aaf35f62fae7c58d08f04');
+      // Call Shoti API to get video details
+      const response = await axios.get(`https://api.shoti.com/get-video`, {
+        params: {
+          url: prompt,
+        },
+      });
 
       if (response.data.status) {
         const videoUrl = response.data.videoDownloadLink;
         const videoTitle = response.data.title;
 
-        // Create a temporary file path in the system temp directory
+        // Create a temporary file path
         const tempFilePath = path.join(os.tmpdir(), `${Date.now()}-shoti.mp4`);
 
         // Download the video to the temporary file
         const videoStream = await axios({
           url: videoUrl,
-          method: 'GET',
-          responseType: 'stream'
+          method: "GET",
+          responseType: "stream",
         });
 
-        const writer = fs.createWriteStream(tempFilePath);
-        videoStream.data.pipe(writer);
+        // Pipe the video stream to the temporary file
+        const writeStream = fs.createWriteStream(tempFilePath);
+        videoStream.data.pipe(writeStream);
 
-        // Wait for the video to finish downloading
-        await new Promise((resolve, reject) => {
-          writer.on('finish', resolve);
-          writer.on('error', reject);
+        // After the video is downloaded, send it as an attachment
+        writeStream.on("finish", () => {
+          api.sendMessage(
+            {
+              body: `Here is your video: ${videoTitle}`,
+              attachment: fs.createReadStream(tempFilePath),
+              type: "video",
+            },
+            event.threadID,
+            () => {
+              // Clean up the temporary file after sending
+              fs.unlinkSync(tempFilePath);
+            }
+          );
         });
-
-        // Send the video to the user
-        await send({
-          body: `Here is the Shoti video: ${videoTitle}`,
-          attachment: fs.createReadStream(tempFilePath)
-        });
-
-        // Clean up the temporary file after sending
-        fs.unlinkSync(tempFilePath);
       } else {
-        // Notify user of failure
-        await send("Failed to fetch Shoti video. Please try again.");
+        send("Failed to download video. Please try again with a valid link.");
       }
     } catch (error) {
-      // Handle any errors during the process
-      console.error("Error while fetching the Shoti video:", error);
-      await send("An error occurred while fetching the Shoti video.");
-    } finally {
-      isProcessing = false;
+      send(`An error occurred: ${error.message}`);
     }
-  }
+  },
 };
